@@ -23,8 +23,9 @@ const withTransaction = async (fn) => {
   } catch (err) {
     console.error(err);
     await client.query("ROLLBACK");
+    throw err;
   } finally {
     client.release();
   }
 };
-export default { pool, withTransaction };
+export { pool, withTransaction };

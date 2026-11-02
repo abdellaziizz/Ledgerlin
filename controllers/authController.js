@@ -70,9 +70,9 @@ const restrictTo = (...roles) => {
   };
 };
 const register = catchAsync(async (req, res, next) => {
-  const { name, email, password } = req.body;
+  const { email, password } = req.body;
   const passwordHash = await bycrypt.hash(password, 12);
-  const user = await repo.createUser(name, email, passwordHash);
+  const user = await repo.createUser(email, passwordHash);
   return res.status(201).json({
     status: "success",
     token: signToken(user.id),
