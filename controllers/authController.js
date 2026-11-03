@@ -48,11 +48,11 @@ const protect = async (req, res, next) => {
     token,
     process.env.JWT_SECRET,
   );
-  const user = await repo.findUserById(verify.id);
-  if (!user) {
+  const currentUser = await repo.findUserById(verify.id);
+  if (!currentUser) {
     return next(new AppError("User no longer exists", 401, "UNAUTHENTICATED"));
   }
-  req.user = user;
+  req.user = currentUser;
   next();
 };
 const restrictTo = (...roles) => {

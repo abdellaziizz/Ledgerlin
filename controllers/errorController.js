@@ -29,8 +29,7 @@ const errorHandler = (err, req, res, next) => {
       message: error.message,
       stack: error.stack,
     });
-  }
-  if (process.env.NODE_ENV === "production") {
+  } else {
     res.status(statusCode).json({
       status: error.status,
       message: error.isOperational ? error.message : "Something went wrong!",
