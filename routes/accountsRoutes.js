@@ -6,18 +6,21 @@ import {
   createAccountSchema,
   statementQuerySchema,
 } from "../schemas/accountSchema.js";
-
 const router = express.Router();
 router.use(authController.protect);
+
+router.post(
+  "/",
+  validate(createAccountSchema),
+  accountController.createAccount,
+);
 router.get("/:id", accountController.getAccountById);
 // router.get("/:id/statement?", accountController.getAccountById);
-
-router.post("/", accountController.createAccounts);
 
 router.get(
   "/:id/statement",
   requireAccountAccess,
   validate(statementQuerySchema, "query"),
-  accountController.statement,
+  accountController.getStatement,
 );
 export default router;

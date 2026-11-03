@@ -13,6 +13,8 @@ const validate = (schema) => {
       return next(new AppError(message, 400, "VALIDATION_ERROR"));
     }
     req.body = result.data.body; // cleaned values (lowercased email, trimmed name)
+    // Express 5 makes req.query read-only, so parsed query/params live here.
+    req.validated = result.data;
     next();
   };
 };

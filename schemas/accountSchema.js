@@ -15,6 +15,7 @@ const createAccountSchema = z.object({
       .trim()
       .toUpperCase()
       .regex(/^[A-Z]{3}$/, "must be an ISO 4217 code like EGP"),
+    kind: z.enum(["wallet", "system"]).default("wallet"),
   }),
 });
 
