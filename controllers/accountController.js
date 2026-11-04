@@ -2,7 +2,7 @@ import { pool } from "../db.js";
 import AppError from "../utils/appError.js";
 const createAccount = async (req, res, next) => {
   const { currency, kind } = req.body;
-  const ownerId = req.params.id;
+  const ownerId = req.user.id;
   const { rows } = await pool.query(
     `INSERT INTO accounts (owner_id, currency, kind)
      VALUES ($1, $2, $3)
@@ -13,11 +13,17 @@ const createAccount = async (req, res, next) => {
 };
 const getAccountById = async (req, res, next) => {
   const { rows } = await pool.query(
-    "SELECT id, owner_id, currency, kind, balance_cached, created_at FROM accounts WHERE id = $1 AND owner_id = $2",
-    [req.params.id, req.user.id],
+    "SELECT id, owner_id, currency, kind, balance_cached, created_at FROM accounts WHERE id = $1 AND owner_id = $2 OR role = $3",
+    [req.params.id, req.user.id, req.user.role],
   );
-  if (rows.lenght === 0) {
-    return next(new AppError("there is no accounts with this id", 404, ""));
+  if (rows.length === 0) {
+    return next(
+      new AppError(
+        "there is no accounts with this id",
+        404,
+        "ACCOUNT_NOT_FOUND",
+      ),
+    );
   }
   res.status(200).json({ status: "success", data: rows[0] });
 };

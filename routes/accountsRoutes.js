@@ -5,6 +5,7 @@ import validate from "../validate.js";
 import {
   createAccountSchema,
   statementQuerySchema,
+  accountParamsSchema,
 } from "../schemas/accountSchema.js";
 const router = express.Router();
 router.use(authController.protect);
@@ -14,13 +15,16 @@ router.post(
   validate(createAccountSchema),
   accountController.createAccount,
 );
-router.get("/:id", accountController.getAccountById);
+router.get(
+  "/:id",
+  validate(accountParamsSchema),
+  accountController.getAccountById,
+);
 // router.get("/:id/statement?", accountController.getAccountById);
 
 router.get(
   "/:id/statement",
-  requireAccountAccess,
-  validate(statementQuerySchema, "query"),
+  validate(statementQuerySchema),
   accountController.getStatement,
 );
 export default router;

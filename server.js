@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: "./config.env" });
 import app from "./app.js";
 
-const server = app.listen(3000, "127.0.0.1", () => {
+const server = app.listen(process.env.PORT || 3000, "127.0.0.1", () => {
   console.log("app is running on port 3000");
 });
 process.on("unhandledRejection", (err) => {
