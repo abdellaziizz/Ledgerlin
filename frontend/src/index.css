@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Ledgerline design tokens.
+ * Light mode sits on warm "ledger paper"; dark mode on deep ink. The sidebar is ink in both.
+ * Emerald is reserved for money coming in and for primary actions; it is never decoration.
+ */
+:root {
+  --bg: #f4f3ee;
+  --surface: #ffffff;
+  --surface-2: #faf9f5;
+  --surface-sunken: #efede6;
+  --border: #e3e0d6;
+  --border-strong: #cfcbbe;
+  --ink: #0e1726;
+  --ink-2: #485266;
+  --ink-3: #7b8394;
+
+  --accent: #0e7c5a;
+  --accent-hover: #0a6a4c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f0e9;
+  --chart-line: #0e7c5a;
+
+  --credit: #0e7c5a;
+  --debit: #0e1726;
+  --warning: #9a5b00;
+  --warning-soft: #fbefd8;
+  --danger: #b42318;
+  --danger-soft: #fbe8e5;
+  --info-soft: #e8edf6;
+
+  --sidebar: #0b1424;
+  --sidebar-2: #121d31;
+  --sidebar-border: #1c2840;
+  --sidebar-ink: #e8ecf2;
+  --sidebar-ink-2: #8d98ad;
+
+  --ring: #0e7c5a;
+  --shadow-sm: 0 1px 0 rgb(14 23 38 / 0.04), 0 1px 2px rgb(14 23 38 / 0.04);
+  --shadow-md: 0 1px 0 rgb(14 23 38 / 0.04), 0 8px 24px -12px rgb(14 23 38 / 0.18);
+  --shadow-lg: 0 24px 64px -24px rgb(14 23 38 / 0.35);
+}
+
+.dark {
+  --bg: #0a0f19;
+  --surface: #0f1623;
+  --surface-2: #131b2a;
+  --surface-sunken: #0c121d;
+  --border: #1e2738;
+  --border-strong: #2b3649;
+  --ink: #e8ecf2;
+  --ink-2: #a3adbd;
+  --ink-3: #6f798b;
+
+  --accent: #2baa7e;
+  --accent-hover: #34bd8e;
+  --accent-ink: #04140d;
+  --accent-soft: rgb(43 170 126 / 0.12);
+  --chart-line: #2baa7e;
+
+  --credit: #3cc493;
+  --debit: #e8ecf2;
+  --warning: #e0a443;
+  --warning-soft: rgb(224 164 67 / 0.12);
+  --danger: #f07167;
+  --danger-soft: rgb(240 113 103 / 0.12);
+  --info-soft: rgb(120 150 210 / 0.12);
+
+  --sidebar: #070b13;
+  --sidebar-2: #0e1420;
+  --sidebar-border: #182133;
+
+  --ring: #2baa7e;
+  --shadow-sm: 0 1px 0 rgb(0 0 0 / 0.2);
+  --shadow-md: 0 1px 0 rgb(0 0 0 / 0.25), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 24px 64px -24px rgb(0 0 0 / 0.8);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sunken: var(--surface-sunken);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-credit: var(--credit);
+  --color-debit: var(--debit);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info-soft: var(--info-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-2: var(--sidebar-2);
+  --color-sidebar-line: var(--sidebar-border);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-ink-2: var(--sidebar-ink-2);
+  --color-ring: var(--ring);
+
+  --shadow-card: var(--shadow-sm);
+  --shadow-pop: var(--shadow-md);
+  --shadow-modal: var(--shadow-lg);
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --animate-fade-in: fade-in 160ms ease-out both;
+  --animate-rise: rise 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-slide-in: slide-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(16px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ink-3);
+  }
+}
+
+@layer utilities {
+  /* Aligned figures for tables, inputs and ids. Not for standalone hero numbers. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "ss01";
+  }
+  /* The accountant's double rule under a balance. */
+  .rule-double {
+    border-bottom: 3px double var(--border-strong);
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
