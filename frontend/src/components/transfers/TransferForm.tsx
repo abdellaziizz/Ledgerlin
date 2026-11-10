@@ -17,7 +17,7 @@ export interface TransferDraft {
   amountMinor: bigint;
   currency: string;
   description: string;
-  /** Receiver is one of the user's tracked accounts. */
+  /** Receiver is one of the user's own accounts. */
   toIsOwn: boolean;
 }
 
@@ -47,7 +47,7 @@ export function TransferForm({
   onReview: (draft: TransferDraft) => void;
 }) {
   const usable = accounts.filter((a) => a.statement);
-  const defaultFrom = initial?.fromId ?? (usable.some((a) => a.tracked.id === initialFrom) ? initialFrom! : usable[0]?.tracked.id ?? "");
+  const defaultFrom = initial?.fromId ?? (usable.some((a) => a.account.id === initialFrom) ? initialFrom! : usable[0]?.account.id ?? "");
 
   const { register, control, handleSubmit, watch, setValue, setError, clearErrors, formState } = useForm<Values>({
     defaultValues: {
@@ -63,12 +63,12 @@ export function TransferForm({
   const fromId = watch("from");
   const toMode = watch("toMode");
   const description = watch("description");
-  const sender = usable.find((a) => a.tracked.id === fromId);
+  const sender = usable.find((a) => a.account.id === fromId);
   const currency = sender?.statement?.account.currency ?? "";
   const balance = sender?.statement ? toMinor(sender.statement.account.balance_cached) : 0n;
-  const isSystem = sender?.kind === "system";
+  const isSystem = sender?.account.kind === "system";
 
-  const ownTargets = useMemo(() => usable.filter((a) => a.tracked.id !== fromId), [usable, fromId]);
+  const ownTargets = useMemo(() => usable.filter((a) => a.account.id !== fromId), [usable, fromId]);
 
   useEffect(() => {
     if (!serverErrors) return;
@@ -97,7 +97,7 @@ export function TransferForm({
       setError(v.toMode === "own" ? "toOwn" : "toNumber", { message: "Choose a different account than the sender" });
       ok = false;
     } else if (v.toMode === "own") {
-      const target = usable.find((a) => a.tracked.id === toId);
+      const target = usable.find((a) => a.account.id === toId);
       if (target && target.statement?.account.currency !== currency) {
         setError("toOwn", { message: `This account holds ${target.statement?.account.currency}; the sender holds ${currency}` });
         ok = false;
@@ -143,8 +143,8 @@ export function TransferForm({
             className="font-mono"
           >
             {usable.map((acc) => (
-              <option key={acc.tracked.id} value={acc.tracked.id}>
-                {accountLabel(acc.tracked.id)} · {acc.statement!.account.currency} {formatMinor(acc.statement!.account.balance_cached, acc.statement!.account.currency)}
+              <option key={acc.account.id} value={acc.account.id}>
+                {accountLabel(acc.account.id)} · {acc.statement!.account.currency} {formatMinor(acc.statement!.account.balance_cached, acc.statement!.account.currency)}
               </option>
             ))}
           </Select>
@@ -183,8 +183,8 @@ export function TransferForm({
                   {ownTargets.map((acc) => {
                     const cur = acc.statement!.account.currency;
                     return (
-                      <option key={acc.tracked.id} value={acc.tracked.id} disabled={cur !== currency}>
-                        {accountLabel(acc.tracked.id)} · {cur}
+                      <option key={acc.account.id} value={acc.account.id} disabled={cur !== currency}>
+                        {accountLabel(acc.account.id)} · {cur}
                         {cur !== currency ? " (different currency)" : ""}
                       </option>
                     );

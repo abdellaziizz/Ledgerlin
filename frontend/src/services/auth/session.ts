@@ -1,14 +1,12 @@
 /**
  * Session storage for the access token.
  *
- * The backend returns a bearer JWT in the JSON body of /auth/login and /auth/register
- * (it does not set a cookie, although `protect` would also read a `jwt` cookie).
- * We keep it in sessionStorage: it survives a reload but not closing the tab, and it
- * is never written to logs. Passwords are never stored anywhere.
- *
- * The token payload carries only { id, iat, exp } — no role and no email — so the
- * email shown in the UI is the one the person typed when signing in.
+ * The backend returns a short-lived bearer JWT plus the user in the JSON body of
+ * /auth/login and /auth/register. We keep it in sessionStorage: it survives a reload but
+ * not closing the tab, and it is never written to logs. Passwords are never stored anywhere.
+ * The role is display-only here; the backend authorises every request itself.
  */
+import type { Role, User } from "@/types/api";
 
 const KEY = "ledgerline:session";
 
@@ -16,6 +14,7 @@ export interface Session {
   token: string;
   userId: string;
   email: string;
+  role: Role;
   issuedAt: number; // epoch ms
   expiresAt: number; // epoch ms
 }
@@ -44,10 +43,10 @@ export function decodeToken(token: string): { userId: string; issuedAt: number; 
   }
 }
 
-export function createSession(token: string, email: string): Session | null {
+export function createSession(token: string, user: User): Session | null {
   const decoded = decodeToken(token);
   if (!decoded) return null;
-  return { token, email, ...decoded };
+  return { token, email: user.email, role: user.role, ...decoded, userId: user.id };
 }
 
 export function loadSession(): Session | null {
@@ -55,7 +54,7 @@ export function loadSession(): Session | null {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as Session;
-    if (!s.token || s.expiresAt <= Date.now()) {
+    if (!s.token || !s.role || s.expiresAt <= Date.now()) {
       sessionStorage.removeItem(KEY);
       return null;
     }

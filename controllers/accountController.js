@@ -1,54 +1,42 @@
 import { pool } from "../db.js";
-import AppError from "../utils/appError.js";
-const createAccount = async (req, res, next) => {
-  const { currency, kind } = req.body;
-  const ownerId = req.user.id;
+import { audit } from "../services/auditService.js";
+
+const ACCOUNT_COLUMNS = "id, owner_id, currency, kind, balance_cached, created_at";
+
+// Customers open wallets only; system (counterparty) accounts come from the seed script.
+const createAccount = async (req, res) => {
+  const { currency } = req.body;
   const { rows } = await pool.query(
     `INSERT INTO accounts (owner_id, currency, kind)
-     VALUES ($1, $2, $3)
-     RETURNING id, owner_id, currency, kind, balance_cached, created_at`,
-    [ownerId, currency, kind],
+     VALUES ($1, $2, 'wallet')
+     RETURNING ${ACCOUNT_COLUMNS}`,
+    [req.user.id, currency],
   );
+  await audit(null, { actorId: req.user.id, action: "account.created", entityType: "account", entityId: rows[0].id, metadata: { currency } });
   res.status(201).json({ status: "success", data: rows[0] });
 };
-const getAccountById = async (req, res, next) => {
+
+// Customers see their own accounts; auditors see every account.
+const listAccounts = async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT id, owner_id, currency, kind, balance_cached, created_at FROM accounts WHERE id = $1 AND owner_id = $2 OR role = $3",
-    [req.params.id, req.user.id, req.user.role],
+    `SELECT ${ACCOUNT_COLUMNS} FROM accounts
+      WHERE owner_id = $1 OR $2 = 'auditor'
+      ORDER BY id`,
+    [req.user.id, req.user.role],
   );
-  if (rows.length === 0) {
-    return next(
-      new AppError(
-        "there is no accounts with this id",
-        404,
-        "ACCOUNT_NOT_FOUND",
-      ),
-    );
-  }
-  res.status(200).json({ status: "success", data: rows[0] });
+  res.status(200).json({ status: "success", data: rows });
 };
+
+// req.account is loaded and ownership-checked by ownerController.loadAccount.
+const getAccountById = async (req, res) => {
+  res.status(200).json({ status: "success", data: req.account });
+};
+
 // Keyset-paginated statement, newest first.
 // Uses entries_account_id_idx (account_id, id): WHERE account_id = $1 AND id < cursor ORDER BY id DESC.
-const getStatement = async (req, res, next) => {
-  const { params, query } = req.validated;
-  const { cursor, limit } = query;
-
-  // Ownership check: customers see only their own accounts, auditors see all.
-  // 404 instead of 403 so we don't reveal which account ids exist.
-  const { rows: accounts } = await pool.query(
-    `SELECT id, currency, balance_cached FROM accounts
-     WHERE id = $1 AND (owner_id = $2 OR $3 = 'auditor')`,
-    [params.id, req.user.id, req.user.role],
-  );
-  if (accounts.length === 0) {
-    return next(
-      new AppError(
-        "there is no account with this id",
-        404,
-        "ACCOUNT_NOT_FOUND",
-      ),
-    );
-  }
+const getStatement = async (req, res) => {
+  const { cursor, limit } = req.validated.query;
+  const account = req.account;
 
   // Fetch one extra row to know whether another page exists.
   const { rows } = await pool.query(
@@ -61,7 +49,7 @@ const getStatement = async (req, res, next) => {
         AND ($2::bigint IS NULL OR e.id < $2::bigint)
       ORDER BY e.id DESC
       LIMIT $3`,
-    [params.id, cursor ?? null, limit + 1],
+    [account.id, cursor ?? null, limit + 1],
   );
 
   const hasMore = rows.length > limit;
@@ -72,10 +60,11 @@ const getStatement = async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: {
-      account: accounts[0],
+      account: { id: account.id, currency: account.currency, balance_cached: account.balance_cached },
       entries,
       next_cursor: nextCursor,
     },
   });
 };
-export default { getStatement, createAccount, getAccountById };
+
+export default { createAccount, listAccounts, getAccountById, getStatement };

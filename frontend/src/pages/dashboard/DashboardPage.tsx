@@ -1,10 +1,9 @@
-import { ArrowLeftRight, ArrowRight, ChevronRight, History, Plus, RefreshCw, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, ChevronRight, History, Plus, RefreshCw, Scale, ScrollText, Wallet, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { AccountListItem } from "@/components/accounts/AccountListItem";
 import { OpenAccountDialog } from "@/components/accounts/OpenAccountDialog";
-import { TrackAccountDialog } from "@/components/accounts/TrackAccountDialog";
 import { ActivityList } from "@/components/statement/ActivityList";
 import { StatementSkeleton } from "@/components/statement/StatementTable";
 import { Button, buttonStyles } from "@/components/ui/Button";
@@ -12,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useSession } from "@/contexts/AuthContext";
 import { useAccountsOverview } from "@/hooks/useAccountsOverview";
 import { formatTime } from "@/utils/format";
 import { mergeActivity } from "@/utils/ledger";
@@ -45,17 +45,17 @@ function QuickAction({ icon: Icon, title, description, onClick, to }: {
 export default function DashboardPage() {
   const { accounts, totals, isLoading, lastUpdated } = useAccountsOverview();
   const [openNew, setOpenNew] = useState(false);
-  const [openTrack, setOpenTrack] = useState(false);
   const qc = useQueryClient();
 
   const activity = mergeActivity(
     accounts
       .filter((a) => a.statement)
-      .map((a) => ({ accountId: a.tracked.id, currency: a.statement!.account.currency, entries: a.statement!.entries })),
+      .map((a) => ({ accountId: a.account.id, currency: a.statement!.account.currency, entries: a.statement!.entries })),
     8,
   );
   const [primary, ...others] = totals;
   const hasAccounts = accounts.length > 0;
+  const { role } = useSession();
 
   return (
     <>
@@ -89,9 +89,6 @@ export default function DashboardPage() {
                 <Button variant="primary" size="lg" onClick={() => setOpenNew(true)}>
                   <Plus className="size-4" /> Open a wallet
                 </Button>
-                <Button size="lg" onClick={() => setOpenTrack(true)}>
-                  Add existing account
-                </Button>
               </div>
             </div>
             <ol className="border-t border-line bg-surface-2 p-8 sm:p-10 lg:border-l lg:border-t-0">
@@ -122,7 +119,10 @@ export default function DashboardPage() {
                 <span className="text-[13px] font-medium text-ink-2">Total balance</span>
                 <button
                   type="button"
-                  onClick={() => qc.invalidateQueries({ queryKey: ["statement"] })}
+                  onClick={() => {
+                    void qc.invalidateQueries({ queryKey: ["accounts"] });
+                    void qc.invalidateQueries({ queryKey: ["statement"] });
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs text-ink-3 transition-colors hover:bg-sunken hover:text-ink"
                 >
                   <RefreshCw className={`size-3 ${isLoading ? "animate-spin" : ""}`} aria-hidden />
@@ -172,7 +172,10 @@ export default function DashboardPage() {
             <div className="divide-y divide-line border-t border-line">
               <QuickAction icon={ArrowLeftRight} title="Send money" description="Transfer between accounts" to="/transfers" />
               <QuickAction icon={Wallet} title="Open a wallet" description="Add a new currency wallet" onClick={() => setOpenNew(true)} />
-              <QuickAction icon={Plus} title="Add existing account" description="Track an account by number" onClick={() => setOpenTrack(true)} />
+              <QuickAction icon={ScrollText} title="Statements" description="Every entry, newest first" to="/statements" />
+              {role === "auditor" && (
+                <QuickAction icon={Scale} title="Reconcile the ledger" description="Cached balances vs entries" to="/audit" />
+              )}
             </div>
           </Panel>
 
@@ -204,7 +207,7 @@ export default function DashboardPage() {
           <Panel className="lg:col-span-5">
             <PanelHeader
               title="Accounts"
-              description={`${accounts.length} on this device`}
+              description={role === "auditor" ? `${accounts.length} on the ledger` : `${accounts.length} open`}
               actions={
                 <Link to="/accounts" className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ink-2 hover:text-ink">
                   Manage <ArrowRight className="size-3.5" />
@@ -213,7 +216,7 @@ export default function DashboardPage() {
             />
             <div className="divide-y divide-line border-t border-line">
               {accounts.slice(0, 6).map((a) => (
-                <AccountListItem key={a.tracked.id} account={a} />
+                <AccountListItem key={a.account.id} account={a} />
               ))}
             </div>
           </Panel>
@@ -221,7 +224,6 @@ export default function DashboardPage() {
       )}
 
       <OpenAccountDialog open={openNew} onOpenChange={setOpenNew} />
-      <TrackAccountDialog open={openTrack} onOpenChange={setOpenTrack} />
     </>
   );
 }

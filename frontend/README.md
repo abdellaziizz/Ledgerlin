@@ -1,12 +1,12 @@
 # Ledgerline — web frontend
 
-React + TypeScript + Vite client for the Ledgerline API. It talks to the existing Express backend as-is; nothing in the backend was changed for it.
+React + TypeScript + Vite client for the Ledgerline API. In Docker it's the `web` service on http://localhost:8080 (see the root README).
 
 ## Run
 
 ```bash
 # 1. Backend (from the repository root), listening on 127.0.0.1:$PORT (3000 by default)
-node server.js
+npm run db:migrate && npm run db:seed && npm run dev
 
 # 2. Frontend
 cd frontend
@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:5173
 | `VITE_API_BASE_URL` | `/api/v1` | Base path the browser uses for API calls. |
 | `VITE_API_PROXY_TARGET` | `http://127.0.0.1:3000` | Where the Vite dev/preview server forwards `/api`. |
 
-The backend sends no CORS headers, so the browser calls the frontend's own origin and Vite proxies `/api` to Express. In production, serve `dist/` and the API behind one origin (a reverse proxy), or add CORS to the backend.
+The API is served from the same origin as the app: Vite proxies `/api` in development, and in Docker the `web` container's nginx (`nginx.conf`) serves `dist/` and proxies `/api`, `/docs` and `/health` to the API. No CORS is needed.
 
 ## Structure
 
@@ -50,11 +50,17 @@ Amounts stay in integer minor units end to end: API strings become `BigInt`, use
 
 Each transfer intent gets an `Idempotency-Key` when the review dialog opens. If the outcome is unknown (network error, 5xx, `IDEMPOTENCY_IN_PROGRESS`), "Retry safely" resends with the **same** key, so the backend replays the original result instead of moving money twice. Definite rejections (insufficient funds, currency mismatch, not found) return to the form; changing any detail mints a new key. The confirm button locks while a request is in flight, and mutations are never auto-retried.
 
-## Known gaps (backend not available yet)
+## Backend integration
 
-Search for `TODO: Not implemented yet` in `src/`.
+All data comes from the Ledgerline API (`/api/v1`): `auth/register|login|me`, `accounts` (list, create,
+detail, keyset statement), `transfers` (with `Idempotency-Key`) and `admin/reconcile` (auditors).
+The role shown in the UI comes from `/auth/me`; the backend authorises every request regardless.
 
-- **No "list my accounts" endpoint.** The app remembers account ids opened or added on this device (`services/accountRegistry.ts`); every figure is fetched live, and ownership is enforced by the backend.
-- **`GET /account/:id` returns 500** (its SQL references a missing `role` column). Balances come from the statement endpoint; type and open date are known only for accounts opened in this browser, or inferred as "system" from a negative balance.
-- **`POST /admin/reconcile` is unfinished**, and the route currently stops `app.js` from loading. The Reconciliation page is a placeholder.
-- **No `/me`, logout, password change/reset, transfer history/detail, account locking/status, or statement filters.** Sign-out only discards the token locally. Transfer history is assembled from statements. Direction filtering applies to loaded entries.
+Remaining TODOs (search `TODO: Not implemented yet` in `src/`) are features the API doesn't offer:
+password change/reset, profile editing, account status/locking, server-side statement filters, and a
+transfer-detail view with the counterparty.
+
+## Tests
+
+`npm test` runs Vitest on the money and ledger maths (`src/utils/__tests__`): exact decimal parsing,
+currency precision, formatting of very large values, and running-balance reconstruction.

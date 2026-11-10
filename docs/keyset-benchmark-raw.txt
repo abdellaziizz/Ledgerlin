@@ -1,0 +1,258 @@
+loading 1000000 entries...
+loaded in 5.7s
+entries: 1000000; account 1 has 166666 entries; deep page starts after row 100000
+
+## With entries_account_id_idx (account_id, id)
+
+### OFFSET, first page
+
+Limit  (cost=0.85..39.80 rows=50 width=49) (actual time=0.089..0.232 rows=50.00 loops=1)
+  Buffers: shared hit=208
+  ->  Nested Loop  (cost=0.85..131029.43 rows=168200 width=49) (actual time=0.087..0.223 rows=50.00 loops=1)
+        Buffers: shared hit=208
+        ->  Index Scan Backward using entries_pkey on entries e  (cost=0.42..36817.43 rows=168200 width=28) (actual time=0.034..0.088 rows=50.00 loops=1)
+              Filter: (account_id = '1'::bigint)
+              Rows Removed by Filter: 250
+              Index Searches: 1
+              Buffers: shared hit=8
+        ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..0.56 rows=1 width=29) (actual time=0.002..0.002 rows=1.00 loops=50)
+              Index Cond: (id = e.transfer_id)
+              Index Searches: 50
+              Buffers: shared hit=200
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.612 ms
+Execution Time: 0.282 ms
+
+### OFFSET, deep page
+
+Limit  (cost=41552.37..41558.19 rows=50 width=49) (actual time=121.253..129.755 rows=50.00 loops=1)
+  Buffers: shared hit=12666, temp read=1209 written=1356
+  ->  Gather Merge  (cost=29905.72..49495.27 rows=168199 width=49) (actual time=109.052..127.457 rows=100050.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=12666, temp read=1209 written=1356
+        ->  Sort  (cost=28905.70..29080.91 rows=70083 width=49) (actual time=98.003..100.397 rows=33817.33 loops=3)
+              Sort Key: e.id DESC
+              Sort Method: external merge  Disk: 3648kB
+              Buffers: shared hit=12666, temp read=1209 written=1356
+              Worker 0:  Sort Method: external merge  Disk: 3632kB
+              Worker 1:  Sort Method: external merge  Disk: 3520kB
+              ->  Parallel Hash Join  (cost=14034.05..20867.65 rows=70083 width=49) (actual time=36.285..82.374 rows=55555.33 loops=3)
+                    Hash Cond: (t.id = e.transfer_id)
+                    Buffers: shared hit=12652
+                    ->  Parallel Seq Scan on transfers t  (cost=0.00..5760.33 rows=208333 width=29) (actual time=0.008..8.187 rows=166666.67 loops=3)
+                          Buffers: shared hit=3677
+                    ->  Parallel Hash  (cost=13158.02..13158.02 rows=70083 width=28) (actual time=35.865..35.867 rows=55555.33 loops=3)
+                          Buckets: 262144  Batches: 1  Memory Usage: 12544kB
+                          Buffers: shared hit=8975
+                          ->  Parallel Bitmap Heap Scan on entries e  (cost=3947.98..13158.02 rows=70083 width=28) (actual time=1.930..16.748 rows=55555.33 loops=3)
+                                Recheck Cond: (account_id = '1'::bigint)
+                                Heap Blocks: exact=3988
+                                Buffers: shared hit=8975
+                                Worker 0:  Heap Blocks: exact=2304
+                                Worker 1:  Heap Blocks: exact=2042
+                                ->  Bitmap Index Scan on entries_account_id_idx  (cost=0.00..3905.93 rows=168200 width=0) (actual time=4.810..4.811 rows=166666.00 loops=1)
+                                      Index Cond: (account_id = '1'::bigint)
+                                      Index Searches: 1
+                                      Buffers: shared hit=641
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.244 ms
+Execution Time: 130.877 ms
+
+### Keyset id < cursor, first page
+
+Limit  (cost=0.85..39.80 rows=50 width=49) (actual time=0.015..0.095 rows=50.00 loops=1)
+  Buffers: shared hit=208
+  ->  Nested Loop  (cost=0.85..131029.43 rows=168200 width=49) (actual time=0.015..0.093 rows=50.00 loops=1)
+        Buffers: shared hit=208
+        ->  Index Scan Backward using entries_pkey on entries e  (cost=0.42..36817.43 rows=168200 width=28) (actual time=0.008..0.037 rows=50.00 loops=1)
+              Filter: (account_id = '1'::bigint)
+              Rows Removed by Filter: 250
+              Index Searches: 1
+              Buffers: shared hit=8
+        ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..0.56 rows=1 width=29) (actual time=0.001..0.001 rows=1.00 loops=50)
+              Index Cond: (id = e.transfer_id)
+              Index Searches: 50
+              Buffers: shared hit=200
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.144 ms
+Execution Time: 0.111 ms
+
+### Keyset id < cursor, deep page
+
+Limit  (cost=0.85..49.53 rows=50 width=49) (actual time=0.023..0.103 rows=50.00 loops=1)
+  Buffers: shared hit=207
+  ->  Nested Loop  (cost=0.85..65609.95 rows=67388 width=49) (actual time=0.023..0.101 rows=50.00 loops=1)
+        Buffers: shared hit=207
+        ->  Index Scan Backward using entries_pkey on entries e  (cost=0.42..15755.22 rows=67388 width=28) (actual time=0.015..0.042 rows=50.00 loops=1)
+              Index Cond: (id < '400001'::bigint)
+              Filter: (account_id = '1'::bigint)
+              Rows Removed by Filter: 250
+              Index Searches: 1
+              Buffers: shared hit=7
+        ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..0.74 rows=1 width=29) (actual time=0.001..0.001 rows=1.00 loops=50)
+              Index Cond: (id = e.transfer_id)
+              Index Searches: 50
+              Buffers: shared hit=200
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.132 ms
+Execution Time: 0.121 ms
+
+### Keyset first page, quiet account (40 old entries)
+
+Limit  (cost=0.85..623.20 rows=50 width=49) (actual time=0.015..0.064 rows=40.00 loops=1)
+  Buffers: shared hit=165
+  ->  Nested Loop  (cost=0.85..834.80 rows=67 width=49) (actual time=0.015..0.062 rows=40.00 loops=1)
+        Buffers: shared hit=165
+        ->  Index Scan Backward using entries_account_id_idx on entries e  (cost=0.42..273.32 rows=67 width=28) (actual time=0.008..0.013 rows=40.00 loops=1)
+              Index Cond: (account_id = '51'::bigint)
+              Index Searches: 1
+              Buffers: shared hit=5
+        ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..8.38 rows=1 width=29) (actual time=0.001..0.001 rows=1.00 loops=40)
+              Index Cond: (id = e.transfer_id)
+              Index Searches: 40
+              Buffers: shared hit=160
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.131 ms
+Execution Time: 0.079 ms
+
+### Keyset (created_at, id) < cursor, deep page
+
+Limit  (cost=22952.98..22958.81 rows=50 width=49) (actual time=85.515..98.136 rows=50.00 loops=1)
+  Buffers: shared hit=12682
+  ->  Gather Merge  (cost=22952.98..30856.63 rows=67862 width=49) (actual time=85.514..98.131 rows=50.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=12682
+        ->  Sort  (cost=21952.96..22023.65 rows=28276 width=49) (actual time=71.649..71.654 rows=42.33 loops=3)
+              Sort Key: t.created_at DESC, e.id DESC
+              Sort Method: top-N heapsort  Memory: 38kB
+              Buffers: shared hit=12682
+              Worker 0:  Sort Method: top-N heapsort  Memory: 38kB
+              Worker 1:  Sort Method: top-N heapsort  Memory: 38kB
+              ->  Parallel Hash Join  (cost=14034.05..21013.65 rows=28276 width=49) (actual time=27.986..67.324 rows=22222.00 loops=3)
+                    Hash Cond: (t.id = e.transfer_id)
+                    Join Filter: (ROW(t.created_at, e.id) < ROW('2026-11-06 06:29:11.991+00'::timestamp with time zone, '400001'::bigint))
+                    Rows Removed by Join Filter: 33333
+                    Buffers: shared hit=12652
+                    ->  Parallel Seq Scan on transfers t  (cost=0.00..5760.33 rows=208333 width=29) (actual time=0.006..7.457 rows=166666.67 loops=3)
+                          Buffers: shared hit=3677
+                    ->  Parallel Hash  (cost=13158.02..13158.02 rows=70083 width=28) (actual time=27.641..27.642 rows=55555.33 loops=3)
+                          Buckets: 262144  Batches: 1  Memory Usage: 12512kB
+                          Buffers: shared hit=8975
+                          ->  Parallel Bitmap Heap Scan on entries e  (cost=3947.98..13158.02 rows=70083 width=28) (actual time=3.657..13.415 rows=55555.33 loops=3)
+                                Recheck Cond: (account_id = '1'::bigint)
+                                Heap Blocks: exact=3893
+                                Buffers: shared hit=8975
+                                Worker 0:  Heap Blocks: exact=2220
+                                Worker 1:  Heap Blocks: exact=2221
+                                ->  Bitmap Index Scan on entries_account_id_idx  (cost=0.00..3905.93 rows=168200 width=0) (actual time=9.969..9.969 rows=166666.00 loops=1)
+                                      Index Cond: (account_id = '1'::bigint)
+                                      Index Searches: 1
+                                      Buffers: shared hit=641
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.232 ms
+Execution Time: 98.218 ms
+
+## Without the (account_id, id) index (dropped inside a rolled-back transaction)
+
+### OFFSET, deep page
+
+Limit  (cost=41936.69..41942.51 rows=50 width=49) (actual time=131.029..141.283 rows=50.00 loops=1)
+  Buffers: shared hit=12025, temp read=1210 written=1357
+  ->  Gather Merge  (cost=30290.04..49879.58 rows=168199 width=49) (actual time=119.035..138.975 rows=100050.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=12025, temp read=1210 written=1357
+        ->  Sort  (cost=29290.01..29465.22 rows=70083 width=49) (actual time=104.465..106.804 rows=33828.00 loops=3)
+              Sort Key: e.id DESC
+              Sort Method: external merge  Disk: 3592kB
+              Buffers: shared hit=12025, temp read=1210 written=1357
+              Worker 0:  Sort Method: external merge  Disk: 3624kB
+              Worker 1:  Sort Method: external merge  Disk: 3592kB
+              ->  Parallel Hash Join  (cost=14418.37..21251.96 rows=70083 width=49) (actual time=37.030..88.508 rows=55555.33 loops=3)
+                    Hash Cond: (t.id = e.transfer_id)
+                    Buffers: shared hit=12011
+                    ->  Parallel Seq Scan on transfers t  (cost=0.00..5760.33 rows=208333 width=29) (actual time=0.008..8.833 rows=166666.67 loops=3)
+                          Buffers: shared hit=3677
+                    ->  Parallel Hash  (cost=13542.33..13542.33 rows=70083 width=28) (actual time=36.676..36.677 rows=55555.33 loops=3)
+                          Buckets: 262144  Batches: 1  Memory Usage: 12544kB
+                          Buffers: shared hit=8334
+                          ->  Parallel Seq Scan on entries e  (cost=0.00..13542.33 rows=70083 width=28) (actual time=0.011..19.524 rows=55555.33 loops=3)
+                                Filter: (account_id = '1'::bigint)
+                                Rows Removed by Filter: 277778
+                                Buffers: shared hit=8334
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.213 ms
+Execution Time: 142.173 ms
+
+### Keyset id < cursor, deep page
+
+Limit  (cost=0.85..49.53 rows=50 width=49) (actual time=0.041..0.161 rows=50.00 loops=1)
+  Buffers: shared hit=207
+  ->  Nested Loop  (cost=0.85..65609.95 rows=67388 width=49) (actual time=0.040..0.157 rows=50.00 loops=1)
+        Buffers: shared hit=207
+        ->  Index Scan Backward using entries_pkey on entries e  (cost=0.42..15755.22 rows=67388 width=28) (actual time=0.025..0.064 rows=50.00 loops=1)
+              Index Cond: (id < '400001'::bigint)
+              Filter: (account_id = '1'::bigint)
+              Rows Removed by Filter: 250
+              Index Searches: 1
+              Buffers: shared hit=7
+        ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..0.74 rows=1 width=29) (actual time=0.002..0.002 rows=1.00 loops=50)
+              Index Cond: (id = e.transfer_id)
+              Index Searches: 50
+              Buffers: shared hit=200
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.196 ms
+Execution Time: 0.189 ms
+
+### Keyset first page, quiet account (40 old entries)
+
+Limit  (cost=14777.68..14783.50 rows=50 width=49) (actual time=30.342..35.989 rows=40.00 loops=1)
+  Buffers: shared hit=8508
+  ->  Gather Merge  (cost=14777.68..14785.48 rows=67 width=49) (actual time=30.340..35.984 rows=40.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=8508
+        ->  Sort  (cost=13777.65..13777.72 rows=28 width=49) (actual time=16.191..16.193 rows=13.33 loops=3)
+              Sort Key: e.id DESC
+              Sort Method: quicksort  Memory: 30kB
+              Buffers: shared hit=8508
+              Worker 0:  Sort Method: quicksort  Memory: 25kB
+              Worker 1:  Sort Method: quicksort  Memory: 25kB
+              ->  Nested Loop  (cost=0.42..13776.98 rows=28 width=49) (actual time=6.317..16.159 rows=13.33 loops=3)
+                    Buffers: shared hit=8494
+                    ->  Parallel Seq Scan on entries e  (cost=0.00..13542.33 rows=28 width=28) (actual time=6.291..16.104 rows=13.33 loops=3)
+                          Filter: (account_id = '51'::bigint)
+                          Rows Removed by Filter: 333320
+                          Buffers: shared hit=8334
+                    ->  Index Scan using transfers_pkey on transfers t  (cost=0.42..8.38 rows=1 width=29) (actual time=0.003..0.003 rows=1.00 loops=40)
+                          Index Cond: (id = e.transfer_id)
+                          Index Searches: 40
+                          Buffers: shared hit=160
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.576 ms
+Execution Time: 36.080 ms
+
+## Summary
+
+| Query | (account_id, id) index | Execution time | Buffers (top node) |
+|---|---|---|---|
+| OFFSET, first page | yes | 0.28 ms | 208 |
+| OFFSET, deep page | yes | 130.88 ms | 13875 |
+| Keyset id < cursor, first page | yes | 0.11 ms | 208 |
+| Keyset id < cursor, deep page | yes | 0.12 ms | 207 |
+| Keyset first page, quiet account (40 old entries) | yes | 0.08 ms | 165 |
+| Keyset (created_at, id) < cursor, deep page | yes | 98.22 ms | 12682 |
+| OFFSET, deep page | no | 142.17 ms | 13235 |
+| Keyset id < cursor, deep page | no | 0.19 ms | 207 |
+| Keyset first page, quiet account (40 old entries) | no | 36.08 ms | 8508 |

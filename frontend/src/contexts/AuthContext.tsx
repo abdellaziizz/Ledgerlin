@@ -5,6 +5,7 @@ import * as authApi from "@/services/api/auth";
 import { setUnauthorizedHandler } from "@/services/api/client";
 import { ApiError } from "@/services/api/errors";
 import { createSession, sessionStore, type Session } from "@/services/auth/session";
+import type { User } from "@/types/api";
 
 interface AuthContextValue {
   session: Session | null;
@@ -24,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(
     (reason?: "expired") => {
-      // TODO: Not implemented yet - no backend logout/revocation endpoint; the token is only discarded locally.
+      // Stateless JWT: discarding it ends the session here; it expires server-side within JWT_EXPIRES_IN.
       sessionStore.set(null);
       setSession(null);
       queryClient.clear();
@@ -33,8 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  const establish = useCallback((token: string, email: string) => {
-    const s = createSession(token, email);
+  const establish = useCallback((token: string, user: User) => {
+    const s = createSession(token, user);
     if (!s) throw new ApiError({ kind: "http", message: "The server returned an unreadable session token." });
     sessionStore.set(s);
     setSession(s);
@@ -42,19 +43,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const normalized = email.trim().toLowerCase();
-      establish(await authApi.login({ email: normalized, password }), normalized);
+      const { token, user } = await authApi.login({ email: email.trim().toLowerCase(), password });
+      establish(token, user);
     },
     [establish],
   );
 
   const register = useCallback(
     async (email: string, password: string) => {
-      const normalized = email.trim().toLowerCase();
-      establish(await authApi.register({ email: normalized, password }), normalized);
+      const { token, user } = await authApi.register({ email: email.trim().toLowerCase(), password });
+      establish(token, user);
     },
     [establish],
   );
+
+  // Refresh the profile once per session load, so a role change on the server shows up.
+  const sessionToken = session?.token;
+  useEffect(() => {
+    if (!sessionToken) return;
+    const ctrl = new AbortController();
+    authApi
+      .me(ctrl.signal)
+      .then((user) => {
+        const current = sessionStore.get();
+        if (!current || current.token !== sessionToken) return;
+        if (current.role === user.role && current.email === user.email) return;
+        const next = { ...current, role: user.role, email: user.email };
+        sessionStore.set(next);
+        setSession(next);
+      })
+      .catch(() => {}); // a 401 is handled by the client's unauthorized handler
+    return () => ctrl.abort();
+  }, [sessionToken]);
 
   useEffect(() => {
     setUnauthorizedHandler(() => logout("expired"));

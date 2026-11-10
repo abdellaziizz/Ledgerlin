@@ -40,7 +40,9 @@ export default function TransfersPage() {
   const [openNew, setOpenNew] = useState(false);
   const inFlight = useRef(false);
 
-  const sender = accounts.find((a) => a.tracked.id === draft?.fromId);
+  const sender = accounts.find((a) => a.account.id === draft?.fromId);
+  // Only the owner can send from an account (auditors see others' accounts but can't move money).
+  const own = accounts.filter((a) => a.isOwn);
 
   const openReview = (d: TransferDraft) => {
     const fp = fingerprint(d);
@@ -117,14 +119,14 @@ export default function TransfersPage() {
 
   const activity = groupByTransfer(
     mergeActivity(
-      accounts
+      own
         .filter((a) => a.statement)
-        .map((a) => ({ accountId: a.tracked.id, currency: a.statement!.account.currency, entries: a.statement!.entries })),
+        .map((a) => ({ accountId: a.account.id, currency: a.statement!.account.currency, entries: a.statement!.entries })),
       40,
     ),
   ).slice(0, 10);
 
-  const hasUsable = accounts.some((a) => a.statement);
+  const hasUsable = own.some((a) => a.statement);
 
   return (
     <>
@@ -141,7 +143,7 @@ export default function TransfersPage() {
                 setFormKey((k) => k + 1);
               }}
             />
-          ) : accounts.length === 0 ? (
+          ) : own.length === 0 ? (
             <EmptyState
               icon={Wallet}
               title="Open a wallet first"
@@ -169,7 +171,7 @@ export default function TransfersPage() {
               <div className="border-t border-line p-5 sm:p-6">
                 <TransferForm
                   key={formKey}
-                  accounts={accounts}
+                  accounts={own}
                   initialFrom={params.get("from") ?? undefined}
                   initial={lastDraft}
                   serverErrors={fieldErrors}
@@ -219,8 +221,8 @@ export default function TransfersPage() {
               </EmptyState>
             )}
           </div>
-          {/* TODO: Not implemented yet - no transfer history endpoint; this list is built from the latest
-              statement entries of your accounts, one row per transfer. */}
+          {/* History comes from account statements (the ledger has no separate transfer feed),
+              merged across your accounts and collapsed to one row per transfer. */}
         </Panel>
       </div>
 
@@ -228,7 +230,7 @@ export default function TransfersPage() {
         draft={draft}
         idempotencyKey={attempt?.key ?? ""}
         senderBalance={sender?.statement ? toMinor(sender.statement.account.balance_cached) : 0n}
-        senderIsSystem={sender?.kind === "system"}
+        senderIsSystem={sender?.account.kind === "system"}
         pending={create.isPending}
         uncertain={!!attempt?.uncertain}
         error={reviewError}

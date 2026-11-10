@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // accounts.id is a bigint identity; keep it as a digit string so it never loses precision.
-const idParam = z.string().regex(/^[1-9]\d*$/, "must be a positive integer id");
+const idParam = z.string().regex(/^[1-9]\d{0,18}$/, "must be a positive integer id");
 
 const accountParamsSchema = z.object({
   params: z.object({ id: idParam }),
@@ -15,7 +15,7 @@ const createAccountSchema = z.object({
       .trim()
       .toUpperCase()
       .regex(/^[A-Z]{3}$/, "must be an ISO 4217 code like EGP"),
-    kind: z.enum(["wallet", "system"]).default("wallet"),
+    kind: z.literal("wallet", { error: "customers can only open wallet accounts" }).default("wallet"),
   }),
 });
 
@@ -28,4 +28,4 @@ const statementQuerySchema = z.object({
   }),
 });
 
-export { accountParamsSchema, createAccountSchema, statementQuerySchema };
+export { idParam, accountParamsSchema, createAccountSchema, statementQuerySchema };

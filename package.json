@@ -1,10 +1,18 @@
 {
-  "name": "project",
+  "name": "ledgerline",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Idempotent double-entry ledger API",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node --watch server.js | pino-pretty",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "reconcile": "node scripts/reconcile.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench:keyset": "node scripts/bench-keyset.js",
+    "chaos": "node scripts/chaos-double-spend.js"
   },
   "keywords": [],
   "author": "",
@@ -17,11 +25,21 @@
     "express": "^5.3.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "morgan": "^1.12.1",
     "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "node-pg-migrate": "^9.0.0"
+    "@testcontainers/postgresql": "^12.2.1",
+    "pino-pretty": "^13.2.0",
+    "supertest": "^7.3.2",
+    "testcontainers": "^12.2.1",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

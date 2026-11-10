@@ -35,15 +35,23 @@ const fromJwtError = (err) => {
   }
   return err;
 };
+// express.json() errors (malformed or oversized bodies).
+const fromBodyParserError = (err) => {
+  if (err.type === "entity.parse.failed") return new AppError("Request body is not valid JSON", 400, "INVALID_JSON");
+  if (err.type === "entity.too.large") return new AppError("Request body is too large", 413, "PAYLOAD_TOO_LARGE");
+  return err;
+};
+// eslint-disable-next-line no-unused-vars
 const errorHandler = (err, req, res, next) => {
   let error = err;
+  if (!error.isOperational) error = fromBodyParserError(error);
   if (!error.isOperational) error = fromJwtError(error);
   if (!error.isOperational && error.code) error = fromPgError(error);
   const statusCode = error.statusCode || 500;
   if (!error.isOperational) {
-    console.error(`Unhandled error: ${req.method} ${req.originalUrl}`, err);
+    (req.log ?? console).error({ err }, `Unhandled error: ${req.method} ${req.originalUrl}`);
   }
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development" && statusCode >= 500) {
     res.status(statusCode).json({
       status: error.status || "error",
       code: error.code,

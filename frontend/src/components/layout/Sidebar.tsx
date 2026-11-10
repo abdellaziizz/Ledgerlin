@@ -54,6 +54,7 @@ function NavItem({ to, label, icon: Icon, end, trailing, onNavigate }: {
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { logout } = useAuth();
   const session = useSession();
+  const isAuditor = session.role === "auditor";
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-ink">
@@ -67,13 +68,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
 
         <div className="mt-6 mb-1.5 px-3 text-2xs font-medium uppercase tracking-[0.08em] text-sidebar-ink-2/70">Ledger tools</div>
-        <NavItem
-          to="/audit"
-          label="Reconciliation"
-          icon={Scale}
-          onNavigate={onNavigate}
-          trailing={<span className="rounded bg-sidebar-2 px-1.5 py-0.5 text-[10px] font-medium text-sidebar-ink-2">Soon</span>}
-        />
+        {isAuditor && <NavItem to="/audit" label="Reconciliation" icon={Scale} onNavigate={onNavigate} />}
         <NavItem to="/settings" label="Settings" icon={Settings} onNavigate={onNavigate} />
       </nav>
 
@@ -90,7 +85,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <div className="truncate text-[13px] font-medium text-sidebar-ink" title={session.email}>
               {session.email}
             </div>
-            <div className="text-2xs text-sidebar-ink-2">Signed in</div>
+            <div className="text-2xs capitalize text-sidebar-ink-2">{session.role}</div>
           </div>
           <button
             type="button"

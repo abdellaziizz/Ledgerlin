@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ProtectedRoute, PublicOnlyRoute } from "./guards";
+import { AuditorRoute, ProtectedRoute, PublicOnlyRoute } from "./guards";
 
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("@/pages/auth/RegisterPage"));
@@ -45,7 +45,7 @@ export const router = createBrowserRouter([
           { path: "accounts/:id", element: page(<AccountDetailPage />) },
           { path: "transfers", element: page(<TransfersPage />) },
           { path: "statements", element: page(<StatementPage />) },
-          { path: "audit", element: page(<ReconcilePage />) },
+          { element: <AuditorRoute />, children: [{ path: "audit", element: page(<ReconcilePage />) }] },
           { path: "settings", element: page(<SettingsPage />) },
           { path: "*", element: page(<NotFoundPage />) },
         ],

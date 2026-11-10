@@ -1,4 +1,4 @@
-import type { AccountKind, StatementEntry } from "@/types/api";
+import type { StatementEntry } from "@/types/api";
 import { toMinor, type MinorUnits } from "./money";
 
 export interface EntryWithBalance extends StatementEntry {
@@ -51,13 +51,13 @@ export interface TransferGroup {
   description: string | null;
   currency: string;
   amount_minor: string;
-  /** Tracked account that was debited, if any. */
+  /** Visible account that was debited, if any. */
   from?: string;
-  /** Tracked account that was credited, if any. */
+  /** Visible account that was credited, if any. */
   to?: string;
 }
 
-/** Collapses activity into one row per transfer; a transfer between two tracked accounts shows both sides. */
+/** Collapses activity into one row per transfer; a transfer between two visible accounts shows both sides. */
 export function groupByTransfer(items: ActivityItem[]): TransferGroup[] {
   const map = new Map<string, TransferGroup>();
   for (const it of items) {
@@ -75,13 +75,3 @@ export function groupByTransfer(items: ActivityItem[]): TransferGroup[] {
   return [...map.values()].sort((a, b) => (BigInt(b.transfer_id) > BigInt(a.transfer_id) ? 1 : -1));
 }
 
-/**
- * Account kind as far as the frontend can know it. Recorded at creation when available;
- * otherwise a negative balance proves "system", because the database's wallet_non_negative
- * constraint forbids negative wallets. A positive account added by number stays unknown.
- */
-export function effectiveKind(known: AccountKind | undefined, balance: string | undefined): AccountKind | undefined {
-  if (known) return known;
-  if (balance !== undefined && toMinor(balance) < 0n) return "system";
-  return undefined;
-}

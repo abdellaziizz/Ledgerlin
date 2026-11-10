@@ -1,30 +1,16 @@
 import express from "express";
-import authController from "../controllers/authController.js";
 import accountController from "../controllers/accountController.js";
+import authController from "../controllers/authController.js";
+import ownerController from "../controllers/ownerController.js";
+import { accountParamsSchema, createAccountSchema, statementQuerySchema } from "../schemas/accountSchema.js";
 import validate from "../validate.js";
-import {
-  createAccountSchema,
-  statementQuerySchema,
-  accountParamsSchema,
-} from "../schemas/accountSchema.js";
+
 const router = express.Router();
 router.use(authController.protect);
 
-router.post(
-  "/",
-  validate(createAccountSchema),
-  accountController.createAccount,
-);
-router.get(
-  "/:id",
-  validate(accountParamsSchema),
-  accountController.getAccountById,
-);
-// router.get("/:id/statement?", accountController.getAccountById);
+router.get("/", accountController.listAccounts);
+router.post("/", validate(createAccountSchema), accountController.createAccount);
+router.get("/:id", validate(accountParamsSchema), ownerController.loadAccount, accountController.getAccountById);
+router.get("/:id/statement", validate(statementQuerySchema), ownerController.loadAccount, accountController.getStatement);
 
-router.get(
-  "/:id/statement",
-  validate(statementQuerySchema),
-  accountController.getStatement,
-);
 export default router;

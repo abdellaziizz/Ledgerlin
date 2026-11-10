@@ -1,28 +1,30 @@
-const colors = {
-  green: "\x1b[32m",
-  cyan: "\x1b[36m",
-  yellow: "\x1b[33m",
-  red: "\x1b[31m",
-  reset: "\x1b[0m",
-};
-function statusColor(status) {
-  if (status >= 500) return colors.red;
-  if (status >= 400) return colors.yellow;
-  if (status >= 300) return colors.cyan;
-  return colors.green;
-}
-function log(req, res, next) {
-  const start = process.hrtime.bigint();
-  res.on("finish", () => {
-    const ms = Number(process.hrtime.bigint() - start) / 1e6;
-    const color = statusColor(res.statusCode);
+import crypto from "crypto";
+import pino from "pino";
+import pinoHttp from "pino-http";
+import config from "./config.js";
 
-    console.log(
-      `${req.method} ${req.originalUrl} ` +
-        `${color}${res.statusCode}${colors.reset} ` +
-        `${ms.toFixed(2)} ms`,
-    );
-  });
-  next();
-}
-export default log;
+export const logger = pino({
+  level: config.logLevel,
+  redact: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"],
+});
+
+// Structured JSON request logs. Every request gets an id (client-supplied X-Request-Id
+// if it looks sane, otherwise a UUID) that is echoed back and attached to every log line.
+export const httpLogger = pinoHttp({
+  logger,
+  genReqId(req, res) {
+    const incoming = req.headers["x-request-id"];
+    const id = typeof incoming === "string" && /^[\w.-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
+    res.setHeader("X-Request-Id", id);
+    return id;
+  },
+  customLogLevel(_req, res, err) {
+    if (err || res.statusCode >= 500) return "error";
+    if (res.statusCode >= 400) return "warn";
+    return "info";
+  },
+  serializers: {
+    req: (req) => ({ id: req.id, method: req.method, url: req.url }),
+    res: (res) => ({ statusCode: res.statusCode }),
+  },
+});

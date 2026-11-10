@@ -14,13 +14,30 @@ export interface ApiErrorBody {
   message?: string;
 }
 
-/** POST /auth/register (201) and POST /auth/login (200). No user object is returned. */
+export interface User {
+  id: string;
+  email: string;
+  role: Role;
+  created_at: string;
+}
+
+/** POST /auth/register (201) and POST /auth/login (200). */
 export interface AuthResponse {
   status: "success";
   token: string;
+  data: { user: User };
 }
 
-/** POST /account (201) and GET /account/:id (200). */
+/** POST /admin/reconcile (auditor only). */
+export interface ReconcileResult {
+  reconciled: boolean;
+  accounts_checked: number;
+  drifted_accounts: { account_id: string; balance_cached: string; balance_derived: string; difference: string }[];
+  unbalanced_transfers: string[];
+  checked_at: string;
+}
+
+/** GET /accounts, POST /accounts (201), GET /accounts/:id. */
 export interface Account {
   id: string;
   owner_id: string;
@@ -48,14 +65,14 @@ export interface StatementEntry {
   created_at: string;
 }
 
-/** GET /account/:id/statement?cursor=&limit= (keyset, newest first). */
+/** GET /accounts/:id/statement?cursor=&limit= (keyset, newest first). */
 export interface Statement {
   account: StatementAccount;
   entries: StatementEntry[];
   next_cursor: string | null;
 }
 
-/** POST /transfer body. Ids and amount must be JSON numbers (z.number().int()). */
+/** POST /transfers body. Ids and amount must be JSON numbers (z.number().int()). */
 export interface CreateTransferInput {
   from_account_id: number;
   to_account_id: number;

@@ -1,0 +1,49 @@
+# docker compose up --build
+#   web  http://localhost:8080        (frontend; proxies /api to the API)
+#   api  http://localhost:3000/docs   (Swagger UI)
+# The API container migrates and seeds on start; both are idempotent.
+name: ledgerline
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ledgerline
+      POSTGRES_USER: ledgerline
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ledgerline}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerline -d ledgerline"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:5433:5432" # for psql from the host; not needed by the app
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ledgerline:${POSTGRES_PASSWORD:-ledgerline}@db:5432/ledgerline
+      # Local demo only. Set a real secret in .env (see .env.example) for anything shared.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-change-me-0f6c2b1e9a4d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      TRANSFER_MODE: ${TRANSFER_MODE:-locks}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    command: sh -c "node scripts/migrate.js && node scripts/seed.js && node server.js"
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  web:
+    build: ./frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  pgdata:

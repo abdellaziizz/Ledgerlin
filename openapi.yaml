@@ -1,0 +1,295 @@
+openapi: 3.1.0
+info:
+  title: Ledgerline API
+  version: 1.0.0
+  description: |
+    Idempotent double-entry ledger. Money is always an integer number of **minor units**
+    (piastres, cents) and every bigint (ids, amounts) is returned as a **string** so it never
+    loses precision. Every transfer posts a balanced debit/credit pair in one transaction.
+
+    Errors share one shape: `{ "status": "fail" | "error", "code": "...", "message": "..." }`.
+servers:
+  - url: /api/v1
+tags:
+  - name: Auth
+  - name: Accounts
+  - name: Transfers
+  - name: Admin
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a customer and return an access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+            example: { email: "nadia@example.com", password: "correct-horse-1" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: Email already registered (CONFLICT), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Exchange email and password for an access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+            example: { email: "demo@ledgerline.dev", password: "demo-pass-123" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { description: INVALID_CREDENTIALS, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: The signed-in user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: success }
+                  data: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts (own accounts for customers, all accounts for auditors)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: success }
+                  data: { type: array, items: { $ref: "#/components/schemas/Account" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Accounts]
+      summary: Open a wallet
+      description: Customers can only open `wallet` accounts. `system` (counterparty) accounts are created by the seed script.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currency]
+              properties:
+                currency: { type: string, pattern: "^[A-Za-z]{3}$", example: EGP }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object, properties: { status: { type: string }, data: { $ref: "#/components/schemas/Account" } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /accounts/{id}:
+    get:
+      tags: [Accounts]
+      summary: One account (404 unless you own it or are an auditor)
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { status: { type: string }, data: { $ref: "#/components/schemas/Account" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /accounts/{id}/statement:
+    get:
+      tags: [Accounts]
+      summary: Keyset-paginated statement, newest first
+      description: |
+        Pass the previous page's `next_cursor` as `cursor`. Uses the `(account_id, id)` index:
+        `WHERE account_id = $1 AND id < $cursor ORDER BY id DESC LIMIT $limit`.
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+        - { name: cursor, in: query, schema: { type: string, pattern: "^[1-9]\\d*$" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  data: { $ref: "#/components/schemas/Statement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /transfers:
+    post:
+      tags: [Transfers]
+      summary: Move money between two accounts of the same currency
+      description: |
+        Requires an `Idempotency-Key`. The first successful response is stored against
+        `(user, key)` and replayed for retries (with `Idempotent-Replayed: true`). Reusing a key
+        with different parameters returns 422. Failed attempts roll back the key, so they can be
+        retried with the same key.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 255 }
+          example: tr_7f3c2a91-5d1e-4b7a-9a3e-2c4f1b8d6e01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferRequest" }
+            example: { from_account_id: 3, to_account_id: 4, amount_minor: 125075, currency: EGP, description: "Weekend trip fund" }
+      responses:
+        "201":
+          description: Created (or replayed)
+          headers:
+            Idempotent-Replayed: { schema: { type: string, enum: ["true"] }, description: Present when this is a stored replay }
+          content:
+            application/json:
+              schema: { type: object, properties: { status: { type: string }, data: { $ref: "#/components/schemas/Transfer" } } }
+        "400": { description: "VALIDATION_ERROR, IDEMPOTENCY_KEY_MISSING, CURRENCY_MISMATCH", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: ACCOUNT_NOT_FOUND (sender not yours, or receiver missing), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: "INSUFFICIENT_FUNDS or IDEMPOTENCY_KEY_REUSED", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: RETRY (serialization failure after retries) — safe to retry with the same key, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+  /admin/reconcile:
+    post:
+      tags: [Admin]
+      summary: Prove cached balances equal entry sums (auditor only)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id: { type: string, description: Check a single account }
+      responses:
+        "200":
+          description: Reconciliation result (also written to audit_log)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  data: { $ref: "#/components/schemas/ReconcileResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Not an auditor (FORBIDDEN), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    AccountId: { name: id, in: path, required: true, schema: { type: string, pattern: "^[1-9]\\d*$" } }
+  responses:
+    ValidationError: { description: VALIDATION_ERROR, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    Unauthorized: { description: "UNAUTHENTICATED, TOKEN_EXPIRED or TOKEN_INVALID", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    NotFound: { description: ACCOUNT_NOT_FOUND, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        status: { type: string, enum: [fail, error] }
+        code: { type: string, example: INSUFFICIENT_FUNDS }
+        message: { type: string }
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 72 }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { type: string, enum: [customer, auditor] }
+        created_at: { type: string, format: date-time }
+    AuthResponse:
+      type: object
+      properties:
+        status: { type: string, const: success }
+        token: { type: string, description: JWT access token (Bearer) }
+        data: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } }
+    Account:
+      type: object
+      properties:
+        id: { type: string, example: "3" }
+        owner_id: { type: string, format: uuid }
+        currency: { type: string, example: EGP }
+        kind: { type: string, enum: [wallet, system] }
+        balance_cached: { type: string, description: Minor units, example: "2507635" }
+        created_at: { type: string, format: date-time }
+    StatementEntry:
+      type: object
+      properties:
+        id: { type: string }
+        transfer_id: { type: string }
+        direction: { type: string, enum: [debit, credit] }
+        amount_minor: { type: string }
+        signed_amount_minor: { type: string, example: "-38075" }
+        description: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    Statement:
+      type: object
+      properties:
+        account: { type: object, properties: { id: { type: string }, currency: { type: string }, balance_cached: { type: string } } }
+        entries: { type: array, items: { $ref: "#/components/schemas/StatementEntry" } }
+        next_cursor: { type: [string, "null"] }
+    TransferRequest:
+      type: object
+      required: [from_account_id, to_account_id, amount_minor, currency]
+      properties:
+        from_account_id: { type: integer, minimum: 1 }
+        to_account_id: { type: integer, minimum: 1 }
+        amount_minor: { type: integer, minimum: 1, description: Integer minor units; floats are rejected }
+        currency: { type: string, example: EGP }
+        description: { type: string, maxLength: 500 }
+    Transfer:
+      type: object
+      properties:
+        id: { type: string }
+        from_account_id: { type: string }
+        to_account_id: { type: string }
+        amount_minor: { type: string }
+        currency: { type: string }
+        description: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    ReconcileResult:
+      type: object
+      properties:
+        reconciled: { type: boolean }
+        accounts_checked: { type: integer }
+        drifted_accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id: { type: string }
+              balance_cached: { type: string }
+              balance_derived: { type: string }
+              difference: { type: string }
+        unbalanced_transfers: { type: array, items: { type: string } }
+        checked_at: { type: string, format: date-time }

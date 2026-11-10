@@ -4,3 +4,6 @@ config.env
 .env.*
 *.log
 .DS_Store
+!.env.example
+coverage/
+dist/

@@ -14,3 +14,10 @@ export function PublicOnlyRoute() {
   if (session) return <Navigate to="/" replace />;
   return <Outlet />;
 }
+
+/** Auditor-only screens. The backend enforces the role too (403 for customers). */
+export function AuditorRoute() {
+  const { session } = useAuth();
+  if (session?.role !== "auditor") return <Navigate to="/" replace />;
+  return <Outlet />;
+}

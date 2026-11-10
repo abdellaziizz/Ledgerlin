@@ -12,8 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Segmented } from "@/components/ui/Segmented";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useInfiniteStatement } from "@/hooks/queries";
-import { useTrackedAccounts } from "@/hooks/useTrackedAccounts";
+import { useAccounts, useInfiniteStatement } from "@/hooks/queries";
 import { ApiError } from "@/services/api/errors";
 import { accountLabel } from "@/utils/format";
 import { withRunningBalance, type EntryWithBalance } from "@/utils/ledger";
@@ -33,10 +32,10 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export default function StatementPage() {
-  const tracked = useTrackedAccounts();
+  const { data: accountList = [] } = useAccounts();
   const [params, setParams] = useSearchParams();
   const requested = params.get("account");
-  const accountId = requested && /^[1-9]\d*$/.test(requested) ? requested : tracked[0]?.id;
+  const accountId = requested && /^[1-9]\d*$/.test(requested) ? requested : accountList[0]?.id;
   const limitParam = params.get("limit") as PageSize | null;
   const limit: PageSize = limitParam && PAGE_SIZES.includes(limitParam) ? limitParam : "25";
   const [direction, setDirection] = useState<DirectionFilter>("all");
@@ -45,7 +44,7 @@ export default function StatementPage() {
   const q = useInfiniteStatement(accountId, Number(limit));
   const data = q.data;
   const header = data?.pages[0]?.account;
-  const currency = header?.currency ?? tracked.find((t) => t.id === accountId)?.currency ?? "";
+  const currency = header?.currency ?? accountList.find((t) => t.id === accountId)?.currency ?? "";
 
   const all = useMemo(() => {
     const first = data?.pages[0]?.account;
@@ -85,16 +84,16 @@ export default function StatementPage() {
             title="No accounts to show"
             actions={<Link to="/accounts" className={buttonStyles({ variant: "primary" })}>Go to accounts</Link>}
           >
-            Open or add an account to see its statement.
+            Open an account to see its statement.
           </EmptyState>
         </Panel>
       </>
     );
   }
 
-  const accountOptions = tracked.some((t) => t.id === accountId)
-    ? tracked
-    : [{ id: accountId, currency: currency || "…", added_at: "" }, ...tracked];
+  const accountOptions = accountList.some((t) => t.id === accountId)
+    ? accountList
+    : [{ id: accountId, currency: currency || "…" }, ...accountList];
 
   return (
     <>

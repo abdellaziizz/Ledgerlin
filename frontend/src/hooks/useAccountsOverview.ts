@@ -1,14 +1,12 @@
-import type { TrackedAccount } from "@/services/accountRegistry";
-import type { AccountKind, Statement } from "@/types/api";
-import { effectiveKind } from "@/utils/ledger";
+import { useSession } from "@/contexts/AuthContext";
+import type { Account, Statement } from "@/types/api";
 import { toMinor } from "@/utils/money";
-import { useStatementPages } from "./queries";
-import { useTrackedAccounts } from "./useTrackedAccounts";
+import { useAccounts, useStatementPages } from "./queries";
 
 export interface AccountOverview {
-  tracked: TrackedAccount;
-  /** Known or inferred kind; undefined when it can't be determined. */
-  kind: AccountKind | undefined;
+  account: Account;
+  /** Owned by the signed-in user (auditors also see other people's accounts). */
+  isOwn: boolean;
   statement?: Statement;
   isLoading: boolean;
   error: unknown;
@@ -17,29 +15,31 @@ export interface AccountOverview {
 
 export const OVERVIEW_PAGE = 20;
 
-/** Every tracked account with its live balance and latest entries (first statement page). */
+/** Every visible account with its live balance and latest entries (first statement page). */
 export function useAccountsOverview() {
-  const tracked = useTrackedAccounts();
-  const results = useStatementPages(tracked.map((t) => t.id), OVERVIEW_PAGE);
+  const { userId } = useSession();
+  const list = useAccounts();
+  const all = list.data ?? [];
+  const results = useStatementPages(all.map((a) => a.id), OVERVIEW_PAGE);
 
-  const accounts: AccountOverview[] = tracked.map((t, i) => ({
-    tracked: t,
-    kind: effectiveKind(t.kind, results[i]?.data?.account.balance_cached),
+  const accounts: AccountOverview[] = all.map((account, i) => ({
+    account,
+    isOwn: account.owner_id === userId,
     statement: results[i]?.data,
     isLoading: results[i]?.isLoading ?? true,
     error: results[i]?.error ?? null,
     refetch: () => void results[i]?.refetch(),
   }));
 
-  // Cheap to compute each render: a handful of accounts.
+  // Holdings: the user's own wallets only. System (counterparty) accounts aren't holdings.
   const totals = (() => {
     const map = new Map<string, { minor: bigint; count: number }>();
     for (const a of accounts) {
-      // System (counterparty) accounts aren't holdings; they may be deeply negative.
-      if (!a.statement || a.kind === "system") continue;
-      const cur = a.statement.account.currency;
+      if (!a.isOwn || a.account.kind === "system") continue;
+      const cur = a.account.currency;
+      const balance = a.statement?.account.balance_cached ?? a.account.balance_cached;
       const prev = map.get(cur) ?? { minor: 0n, count: 0 };
-      map.set(cur, { minor: prev.minor + toMinor(a.statement.account.balance_cached), count: prev.count + 1 });
+      map.set(cur, { minor: prev.minor + toMinor(balance), count: prev.count + 1 });
     }
     return [...map.entries()]
       .map(([currency, v]) => ({ currency, ...v }))
@@ -49,8 +49,9 @@ export function useAccountsOverview() {
   return {
     accounts,
     totals,
-    isLoading: results.some((r) => r.isLoading),
-    allLoaded: results.every((r) => !r.isLoading),
-    lastUpdated: Math.max(0, ...results.map((r) => r.dataUpdatedAt)),
+    listError: list.error,
+    refetchList: () => void list.refetch(),
+    isLoading: list.isLoading || results.some((r) => r.isLoading),
+    lastUpdated: Math.max(list.dataUpdatedAt, 0, ...results.map((r) => r.dataUpdatedAt)),
   };
 }

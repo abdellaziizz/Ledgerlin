@@ -1,26 +1,22 @@
-import { ArrowLeft, ArrowLeftRight, ArrowRight, History, Plus, ScrollText, ShieldOff, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, History, ScrollText, ShieldOff } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { toast } from "sonner";
+import { Link, useParams } from "react-router";
 import { BalanceChart } from "@/components/accounts/BalanceChart";
 import { EntryDetailDialog } from "@/components/statement/EntryDetailDialog";
 import { StatementSkeleton, StatementTable } from "@/components/statement/StatementTable";
 import { Badge, CurrencyTag } from "@/components/ui/Badge";
-import { Button, buttonStyles } from "@/components/ui/Button";
+import { buttonStyles } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
-import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorNotice } from "@/components/ui/ErrorNotice";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useSession } from "@/contexts/AuthContext";
-import { useAccountMeta, useStatementPage } from "@/hooks/queries";
+import { useAccount, useStatementPage } from "@/hooks/queries";
 import { OVERVIEW_PAGE } from "@/hooks/useAccountsOverview";
-import { useTrackedAccounts } from "@/hooks/useTrackedAccounts";
-import { accountRegistry } from "@/services/accountRegistry";
 import { ApiError } from "@/services/api/errors";
 import { accountLabel, formatDateTime } from "@/utils/format";
-import { effectiveKind, withRunningBalance, type EntryWithBalance } from "@/utils/ledger";
+import { withRunningBalance, type EntryWithBalance } from "@/utils/ledger";
 import { formatMinor, toMinor } from "@/utils/money";
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
@@ -36,14 +32,14 @@ export default function AccountDetailPage() {
   const { id = "" } = useParams();
   const validId = /^[1-9]\d*$/.test(id);
   const { userId } = useSession();
-  const tracked = useTrackedAccounts().find((a) => a.id === id);
+  const accountQ = useAccount(validId ? id : undefined);
   const statementQ = useStatementPage(validId ? id : undefined, OVERVIEW_PAGE);
-  const meta = useAccountMeta(validId && statementQ.isSuccess ? id : undefined);
   const [selected, setSelected] = useState<EntryWithBalance | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const navigate = useNavigate();
 
-  const notFound = !validId || (statementQ.error instanceof ApiError && statementQ.error.status === 404);
+  const notFound =
+    !validId ||
+    (accountQ.error instanceof ApiError && accountQ.error.status === 404) ||
+    (statementQ.error instanceof ApiError && statementQ.error.status === 404);
 
   if (notFound) {
     return (
@@ -53,21 +49,7 @@ export default function AccountDetailPage() {
           <EmptyState
             icon={ShieldOff}
             title="Account not available"
-            actions={
-              <>
-                {tracked && (
-                  <Button
-                    onClick={() => {
-                      accountRegistry.remove(userId, id);
-                      navigate("/accounts");
-                    }}
-                  >
-                    Remove from this device
-                  </Button>
-                )}
-                <Link to="/accounts" className={buttonStyles({ variant: "primary" })}>Back to accounts</Link>
-              </>
-            }
+            actions={<Link to="/accounts" className={buttonStyles({ variant: "primary" })}>Back to accounts</Link>}
           >
             This account doesn't exist or belongs to someone else. Only the owner can view an account.
           </EmptyState>
@@ -76,10 +58,11 @@ export default function AccountDetailPage() {
     );
   }
 
+  const account = accountQ.data;
   const statement = statementQ.data;
-  const currency = statement?.account.currency ?? tracked?.currency ?? "";
-  const kind = effectiveKind(meta.data?.kind ?? tracked?.kind, statement?.account.balance_cached);
-  const opened = meta.data?.created_at ?? tracked?.created_at;
+  const currency = statement?.account.currency ?? account?.currency ?? "";
+  const kind = account?.kind;
+  const isOwn = account ? account.owner_id === userId : true;
   const rows = statement ? withRunningBalance(toMinor(statement.account.balance_cached), statement.entries) : [];
 
   return (
@@ -89,41 +72,43 @@ export default function AccountDetailPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">
-              {kind === "system" ? "System account" : kind === "wallet" ? "Wallet" : "Account"} <span className="font-mono">{accountLabel(id)}</span>
+              {kind === "system" ? "System account" : "Wallet"} <span className="font-mono">{accountLabel(id)}</span>
             </h1>
             {currency && <CurrencyTag code={currency} />}
             {kind === "system" && <Badge tone="warning">Can go negative</Badge>}
           </div>
-          <p className="mt-1 text-[13.5px] text-ink-3">Opened {opened ? formatDateTime(opened) : "— date not available"}</p>
+          <div className="mt-1 text-[13.5px] text-ink-3">
+            {account ? `Opened ${formatDateTime(account.created_at)}` : <Skeleton className="h-4 w-48" />}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!tracked && statement && (
-            <Button
-              onClick={() => {
-                accountRegistry.upsert(userId, { id, currency: statement.account.currency });
-                toast.success(`Account ${accountLabel(id)} added`);
-              }}
-            >
-              <Plus className="size-4" /> Add to my accounts
-            </Button>
-          )}
           <Link to={`/statements?account=${id}`} className={buttonStyles()}>
             <ScrollText className="size-4" /> Statement
           </Link>
-          <Link to={`/transfers?from=${id}`} className={buttonStyles({ variant: "primary" })}>
-            <ArrowLeftRight className="size-4" /> Send from this account
-          </Link>
+          {isOwn && (
+            <Link to={`/transfers?from=${id}`} className={buttonStyles({ variant: "primary" })}>
+              <ArrowLeftRight className="size-4" /> Send from this account
+            </Link>
+          )}
         </div>
       </div>
 
-      {statementQ.isError && !notFound && (
-        <ErrorNotice className="mb-5" error={statementQ.error} title="Couldn't load this account" onRetry={() => statementQ.refetch()} />
+      {(statementQ.isError || accountQ.isError) && (
+        <ErrorNotice
+          className="mb-5"
+          error={statementQ.error ?? accountQ.error}
+          title="Couldn't load this account"
+          onRetry={() => {
+            void accountQ.refetch();
+            void statementQ.refetch();
+          }}
+        />
       )}
 
       <div className="grid gap-5 lg:grid-cols-12">
         <Panel className="lg:col-span-8">
           <div className="px-6 pt-6">
-            <div className="text-[13px] font-medium text-ink-2">Available balance</div>
+            <div className="text-[13px] font-medium text-ink-2">{kind === "system" ? "Balance" : "Available balance"}</div>
             <div className="mt-2 min-h-[48px]">
               {statement ? (
                 <div className="flex items-baseline gap-2">
@@ -161,20 +146,11 @@ export default function AccountDetailPage() {
             <Detail label="Currency">{currency || "—"}</Detail>
             <Detail label="Type">{kind === "system" ? "System (counterparty)" : kind === "wallet" ? "Wallet" : "—"}</Detail>
             <Detail label="Overdraft">{kind === "system" ? "Allowed" : kind === "wallet" ? "Not allowed" : "—"}</Detail>
-            <Detail label="Owner">You</Detail>
+            <Detail label="Owner">
+              {isOwn ? "You" : <span className="font-mono text-[12px]" title={account?.owner_id}>{account?.owner_id.slice(0, 8)}…</span>}
+            </Detail>
             {/* TODO: Not implemented yet - account status and locking/unlocking don't exist in the backend schema or routes. */}
           </dl>
-          {tracked && (
-            <div className="border-t border-line px-5 py-4">
-              <button
-                type="button"
-                onClick={() => setConfirmRemove(true)}
-                className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3 hover:text-danger"
-              >
-                <Trash2 className="size-3.5" /> Remove from this device
-              </button>
-            </div>
-          )}
         </Panel>
 
         <Panel className="overflow-hidden lg:col-span-12">
@@ -201,28 +177,6 @@ export default function AccountDetailPage() {
       </div>
 
       <EntryDetailDialog entry={selected} accountId={id} currency={currency} onClose={() => setSelected(null)} />
-      <Dialog
-        open={confirmRemove}
-        onOpenChange={setConfirmRemove}
-        title={`Remove ${accountLabel(id)} from this device?`}
-        description="The account and its money stay on the ledger. You can add it back any time with its number."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmRemove(false)}>Cancel</Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                accountRegistry.remove(userId, id);
-                setConfirmRemove(false);
-                toast(`Removed ${accountLabel(id)} from this device`);
-                navigate("/accounts");
-              }}
-            >
-              Remove
-            </Button>
-          </>
-        }
-      />
     </>
   );
 }

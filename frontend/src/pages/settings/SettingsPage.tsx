@@ -1,16 +1,12 @@
 import { KeyRound, LogOut, Monitor, Moon, Sun } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
-import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, PanelHeader } from "@/components/ui/Panel";
 import { useAuth, useSession } from "@/contexts/AuthContext";
 import { useTheme, type ThemePreference } from "@/contexts/ThemeContext";
-import { useTrackedAccounts } from "@/hooks/useTrackedAccounts";
-import { accountRegistry } from "@/services/accountRegistry";
 import { cn } from "@/utils/cn";
 import { formatDateTime } from "@/utils/format";
 
@@ -36,8 +32,6 @@ export default function SettingsPage() {
   const session = useSession();
   const { logout } = useAuth();
   const { preference, setPreference } = useTheme();
-  const tracked = useTrackedAccounts();
-  const [confirmClear, setConfirmClear] = useState(false);
 
   return (
     <>
@@ -46,7 +40,7 @@ export default function SettingsPage() {
         <Panel>
           <PanelHeader title="Profile" />
           <div className="divide-y divide-line border-t border-line">
-            <Row label="Email" description="The address you signed in with.">
+            <Row label="Email">
               <span className="text-[13px] text-ink">{session.email}</span>
             </Row>
             <Row label="User ID">
@@ -55,10 +49,11 @@ export default function SettingsPage() {
                 <CopyButton value={session.userId} label="Copy user id" />
               </span>
             </Row>
-            {/* TODO: Not implemented yet - no profile endpoint (e.g. GET/PATCH /auth/me): the role,
-                display name and email can't be read or changed from the backend. */}
-            <Row label="Role" description="Customer or auditor access.">
-              <Badge tone="neutral">Not provided by the server</Badge>
+            {/* TODO: Not implemented yet - no endpoint to change email or profile details (GET /auth/me is read-only). */}
+            <Row label="Role" description={session.role === "auditor" ? "Can read every account and run reconciliation." : "Can open wallets and move money between them."}>
+              <Badge tone={session.role === "auditor" ? "info" : "neutral"}>
+                <span className="capitalize">{session.role}</span>
+              </Badge>
             </Row>
           </div>
         </Panel>
@@ -113,42 +108,8 @@ export default function SettingsPage() {
           </div>
         </Panel>
 
-        <Panel>
-          <PanelHeader title="This device" />
-          <div className="divide-y divide-line border-t border-line">
-            <Row
-              label="Remembered accounts"
-              description={`${tracked.length} account ${tracked.length === 1 ? "number is" : "numbers are"} stored in this browser so they can be listed.`}
-            >
-              <Button size="sm" variant="danger" disabled={tracked.length === 0} onClick={() => setConfirmClear(true)}>
-                Forget all
-              </Button>
-            </Row>
-          </div>
-        </Panel>
       </div>
 
-      <Dialog
-        open={confirmClear}
-        onOpenChange={setConfirmClear}
-        title="Forget all accounts on this device?"
-        description="Your accounts and money aren't affected. You can add them back by account number."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmClear(false)}>Cancel</Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                accountRegistry.clear(session.userId);
-                setConfirmClear(false);
-                toast("Accounts forgotten on this device");
-              }}
-            >
-              Forget all
-            </Button>
-          </>
-        }
-      />
     </>
   );
 }

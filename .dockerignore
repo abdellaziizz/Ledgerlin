@@ -1,0 +1,11 @@
+node_modules
+frontend
+tests
+docs
+.git
+.github
+config.env
+.env
+.env.*
+*.log
+coverage

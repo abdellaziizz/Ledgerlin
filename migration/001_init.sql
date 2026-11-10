@@ -2,7 +2,7 @@
 -- Convention: credit = money INTO an account, debit = money OUT of it.
 -- balance_cached = SUM(credits) - SUM(debits) over the account's entries.
 
-BEGIN;
+-- Runs inside the migration runner's transaction (scripts/migrate.js).
 
 CREATE EXTENSION IF NOT EXISTS citext;
 
@@ -138,5 +138,3 @@ SELECT a.id AS account_id,
   LEFT JOIN entries e ON e.account_id = a.id
  GROUP BY a.id, a.balance_cached
 HAVING a.balance_cached <> COALESCE(SUM(CASE e.direction WHEN 'credit' THEN e.amount_minor ELSE -e.amount_minor END), 0);
-
-COMMIT;

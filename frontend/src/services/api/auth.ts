@@ -1,4 +1,4 @@
-import type { AuthResponse } from "@/types/api";
+import type { AuthResponse, Envelope, User } from "@/types/api";
 import { request } from "./client";
 
 export interface Credentials {
@@ -6,19 +6,23 @@ export interface Credentials {
   password: string;
 }
 
-/** POST /auth/login -> 200 { status, token }. 401 "Incorrect email or password". */
-export async function login(creds: Credentials): Promise<string> {
+/** POST /auth/login -> 200 { token, data.user }. 401 INVALID_CREDENTIALS. */
+export async function login(creds: Credentials): Promise<{ token: string; user: User }> {
   const res = await request<AuthResponse>("/auth/login", { method: "POST", body: creds, auth: false });
-  return res.body.token;
+  return { token: res.body.token, user: res.body.data.user };
 }
 
-/** POST /auth/register -> 201 { status, token }. 409 CONFLICT when the email exists. */
-export async function register(creds: Credentials): Promise<string> {
+/** POST /auth/register -> 201 { token, data.user }. 409 CONFLICT when the email exists. */
+export async function register(creds: Credentials): Promise<{ token: string; user: User }> {
   const res = await request<AuthResponse>("/auth/register", { method: "POST", body: creds, auth: false });
-  return res.body.token;
+  return { token: res.body.token, user: res.body.data.user };
 }
 
-// TODO: Not implemented yet - the backend has no logout endpoint. Signing out clears the
-// token client-side only; the JWT remains valid on the server until it expires (JWT_EXPIRES_IN).
-// TODO: Not implemented yet - no "current user" endpoint (e.g. GET /auth/me), so the role
-// (customer/auditor) and profile cannot be read from the backend.
+/** GET /auth/me -> the signed-in user (email and role come from the server, never the token). */
+export async function me(signal?: AbortSignal): Promise<User> {
+  const res = await request<Envelope<{ user: User }>>("/auth/me", { signal });
+  return res.body.data.user;
+}
+
+// Access tokens are short-lived (JWT_EXPIRES_IN, 1h by default) and there is no refresh token,
+// so signing out discards the token locally and the server-side token simply expires.
